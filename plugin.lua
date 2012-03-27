@@ -1,15 +1,23 @@
---Cutscene Plugin by Ozzypig
---February 2012
+--[[
+
+	Cutscene Creator Plugin
+	by Ozzypig
+	V1: February 2012	
+	V2: March 2012
+	
+Enjoy reading through this code. It was made with love.
+	
+]]
 
 manager = PluginManager()
 plugin = manager:CreatePlugin()
 toolbar = plugin:CreateToolbar("Cutscenes")
-button5 = toolbar:CreateButton("", "Create new cutscene track", "film_add.png")
-button6 = toolbar:CreateButton("", "Toggles cutscene track editor", "film_edit.png")
-button = toolbar:CreateButton("", "Find all shotdata children of selected object and play as a cutscene track", "film_go.png")
-button2 = toolbar:CreateButton("", "Clone the CurrentCamera for use in a cutscene track", "camera_add.png")
-button3 = toolbar:CreateButton("", "Create a LocalScript that plays a cutscene track", "script_player_camera_add.png")
-button4 = toolbar:CreateButton("", "Insert a customizable button script that plays a cutscene track", "brick_script_player_camera_add.png")
+
+button_snap = toolbar:CreateButton("", "Create a shot for use in a cutscene track", "camera_add.png")
+button_recall = toolbar:CreateButton("", "Recall a shot", "camera_edit.png")
+button_play = toolbar:CreateButton("", "Find all shotdata children of selected object and play as a cutscene track", "film_go.png")
+button_localscript = toolbar:CreateButton("", "Create a LocalScript that plays a cutscene track", "script_player_camera_add.png")
+button_button = toolbar:CreateButton("", "Insert a customizable button script that plays a cutscene track", "brick_script_player_camera_add.png")
 
 --note:
 children = function (o) local c = o:GetChildren() local n = #c local i = 0 return function () i = i + 1 if i <= n then return i, c[i] end end end
@@ -19,8 +27,6 @@ insert = serv.InsertService
 
 --------------------------------------------------
 
-editor_active = false
-
 colors = {
 	black = Color3.new(0, 0, 0);
 	grey = Color3.new(.5, .5, .5);
@@ -29,156 +35,6 @@ colors = {
 	green = Color3.new(.25, 1, .25);
 	blue = Color3.new(.25, .25, 1);
 }
-
-gui = Instance.new("ScreenGui", serv.CoreGui)
-gui.Name = "CutsceneCreatorGui"
-container = Instance.new("Frame", gui)
---container.Text = ""
---container.AutoButtonColor = false
-container.BackgroundTransparency = 1
-container.Size = UDim2.new(1, 0, 1, 0)
-container.Visible = false
-ribbon = Instance.new("TextButton", container)
-ribbon.Size = UDim2.new(1, 0, 0, 101)
-ribbon.Position = UDim2.new(0, 0, 0, -1)
-ribbon.BorderSizePixel = 0
-ribbon.Text = ""
-ribbon.AutoButtonColor = false
-ribbon.BackgroundColor3 = colors.black
-ribbon.BackgroundTransparency = 0.5
-props = Instance.new("TextButton", ribbon)
-props.Size = UDim2.new(0, 90, 0, 90)
-props.Position = UDim2.new(0, 5, 0, 5)
-props.BorderSizePixel = 0
-props.Text = ""
-props.AutoButtonColor = false
-props.BackgroundColor3 = colors.black
-props.BackgroundTransparency = 0
-props.ClipsDescendants = true
-timeline = Instance.new("TextButton", ribbon)
-timeline.Size = UDim2.new(1, -110, 0, 90)
-timeline.Position = UDim2.new(0, 100, 0, 5)
-timeline.ClipsDescendants = true
-timeline.BorderSizePixel = 0
-timeline.Text = ""
-timeline.AutoButtonColor = false
-timeline.BackgroundColor3 = colors.black
-timeline.BackgroundTransparency = 0
-
-function selectShot(i, shot)
-	props:ClearAllChildren()
-	local y = 5
-	local recall = Instance.new("TextButton", props)
-	recall.BackgroundColor3 = colors.black
-	recall.BorderSizePixel = 1
-	recall.BorderColor3 = colors.grey
-	recall.TextColor3 = colors.white
-	recall.Text = "Recall"
-	recall.Font = "Arial"
-	recall.FontSize = "Size12"
-	recall.Size = UDim2.new(0, 35, 0, 12) 
-	recall.Position = UDim2.new(0, 2, 0, y)
-	recall.MouseButton1Down:connect(function ()
-		print("Recalling shot")
-		workspace.CurrentCamera:Destroy() wait(0.1)
-		local cam = workspace.CurrentCamera
-		cam.CoordinateFrame = shot.CoordinateFrame
-		cam.Focus = shot.Focus
-		cam.FieldOfView = shot.FieldOfView
-	end)
-	local replace = Instance.new("TextButton", props)
-	replace.BackgroundColor3 = colors.black
-	replace.BorderSizePixel = 1
-	replace.BorderColor3 = colors.grey
-	replace.TextColor3 = colors.white
-	replace.Text = "Replace"
-	replace.Font = "Arial"
-	replace.FontSize = "Size12"
-	replace.Size = UDim2.new(0, 38, 0, 12) 
-	replace.Position = UDim2.new(0, 40, 0, y)
-	replace.MouseButton1Down:connect(function ()
-		print("Replaced shot")
-		local newshot = getShotDataFromCamera(workspace.CurrentCamera)
-		for k, v in pairs(newshot) do
-			shot[k] = v
-		end
-	end)
-	
-	y = y + 12 + 5
-	local fov_label = Instance.new("TextLabel", props)
-	fov_label.BackgroundColor3 = colors.black
-	fov_label.BorderSizePixel = 0
-	fov_label.TextColor3 = colors.white
-	fov_label.Text = "FOV: "
-	fov_label.Font = "Arial"
-	fov_label.FontSize = "Size12"
-	fov_label.Position = UDim2.new(0, 0, 0, y)
-	fov_label.TextXAlignment = "Left"
-	fov_label.TextYAlignment = "Top"
-	local fov_field = Instance.new("TextBox", props)
-	fov_field.ClearTextOnFocus = false
-	fov_field.BackgroundColor3 = colors.black
-	fov_field.BorderSizePixel = 1
-	fov_field.BorderColor3 = colors.white
-	fov_field.TextColor3 = colors.white
-	fov_field.Font = "Arial"
-	fov_field.FontSize = "Size12"
-	fov_field.Position = UDim2.new(0, 25, 0, y)
-	fov_field.TextXAlignment = "Left"
-	fov_field.TextYAlignment = "Top"
-	fov_field.Size = UDim2.new(1, -30, 0, 12)
-	local fov_value = shot.FieldOfView
-	local function updateFov() fov_field.Text = math.floor(fov_value + 0.5) end
-	updateFov()
-	fov_field.Changed:connect(function (p)
-		if p == "Text" then
-			local n = tonumber(fov_field.Text)
-			if n then
-				fov_value = math.min(80, math.max(20, n))
-				--print("FOV changed to: " .. fov_value)
-			end
-			updateFov()
-		end
-	end)
-	y = y + 12 + 5
-end
-
-function setupEditor(cutscene_track)
-	local shots = {}
-	for i, v in children(cutscene_track) do
-		local n = tonumber(v.Name)
-		if n then
-			local shot = getShotFromShotData(v)
-			shots[n] = shot
-		end
-	end
-	for i, shot in ipairs(shots) do
-		local b = Instance.new("TextButton", timeline)
-		b.AutoButtonColor = false
-		b.TextColor3 = colors.white
-		b.BorderColor3 = colors.grey
-		b.BackgroundColor3 = colors.black
-		b.BorderSizePixel = 1
-		b.Text = "Shot " .. i
-		b.MouseEnter:connect(function () b.BorderColor3 = colors.white end)
-		b.MouseLeave:connect(function () b.BorderColor3 = colors.grey end)
-		b.Size = UDim2.new(0, 80, 0, 80)
-		b.Position = UDim2.new(0, 5 + (i - 1) * 85, 0, 5)
-		b.MouseButton1Down:connect(function ()
-			selectShot(i, shot)
-		end)
-	end
-end
-
-selection.SelectionChanged:connect(function ()
-	timeline:ClearAllChildren()
-	props:ClearAllChildren()
-	if not editor_active then return end
-	local sel = selection:Get()
-	if not sel[1] then return end
-	if not sel[1]:FindFirstChild("CutsceneTrack") then return end
-	setupEditor(sel[1])
-end)
 
 --------------------------------------------------
 
@@ -582,13 +438,13 @@ function getTrack(p)
 	cc.FieldOfView = fov
 end
 
-button.Click:connect(function ()
+button_play.Click:connect(function ()
 	print("Playing shots...")
 	getTrack(selection:Get()[1])
 	print("Done")
 end)
 
-button2.Click:connect(function ()
+button_snap.Click:connect(function ()
 	local cam = workspace.CurrentCamera
 	local sel = selection:Get()
 	if #sel >= 1 then
@@ -603,7 +459,7 @@ button2.Click:connect(function ()
 	selection:Set{new}
 end)
 
-button3.Click:connect(function ()
+button_localscript.Click:connect(function ()
 	local sel = selection:Get()
 	local m
 	if sel[1] then m = sel[1] else m = Instance.new("Model") end
@@ -617,7 +473,7 @@ button3.Click:connect(function ()
 	selection:Set{ls}
 end)
 
-button4.Click:connect(function ()
+button_button.Click:connect(function ()
 	local sel = selection:Get()
 	local p
 	if sel[1] then p = sel[1] else p = workspace end
@@ -630,23 +486,13 @@ button4.Click:connect(function ()
 	selection:Set{s}
 end)
 
-button5.Click:connect(function ()
-	local m = Instance.new("Model", workspace)
-	m.Name = "Track"
-	local s = Instance.new("IntValue", m)
-	s.Name = "CutsceneTrack"
-	editor_active = true
-	updateEditor()
-	selection:Set{m}
-end)
-
-function updateEditor()
-	container.Visible = editor_active
-	timeline:ClearAllChildren()
-	props:ClearAllChildren()
-end
-
-button6.Click:connect(function ()
-	editor_active = not editor_active
-	updateEditor()
+button_recall.Click:connect(function ()
+	print("Recalling shot")
+	local s = selection:Get()[1]
+	if not s then print("Nothing selected") return end
+	local shot = getShotFromShotData(s)
+	local cam = workspace.CurrentCamera
+	cam.CoordinateFrame = shot.CoordinateFrame
+	cam.Focus = shot.Focus
+	cam.FieldOfView = shot.FieldOfView
 end)
