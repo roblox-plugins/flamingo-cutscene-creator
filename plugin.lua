@@ -2,10 +2,7 @@
 
 	Cutscene Creator Plugin
 	by Ozzypig
-	V1: February 2012	
-	V2: March 2012
-	
-Enjoy reading through this code. It was made with love.
+	February 2012
 	
 ]]
 
@@ -15,6 +12,7 @@ toolbar = plugin:CreateToolbar("Cutscenes")
 
 button_snap = toolbar:CreateButton("", "Create a shot for use in a cutscene track", "camera_add.png")
 button_recall = toolbar:CreateButton("", "Recall a shot", "camera_edit.png")
+button_roll = toolbar:CreateButton("", "Roll the camera", "camera_rot.png")
 button_play = toolbar:CreateButton("", "Find all shotdata children of selected object and play as a cutscene track", "film_go.png")
 button_localscript = toolbar:CreateButton("", "Create a LocalScript that plays a cutscene track", "script_player_camera_add.png")
 button_button = toolbar:CreateButton("", "Insert a customizable button script that plays a cutscene track", "brick_script_player_camera_add.png")
@@ -37,6 +35,90 @@ colors = {
 }
 
 --------------------------------------------------
+
+gui_roll = Instance.new("ScreenGui", serv.CoreGui)
+tb_roll = Instance.new("TextButton", gui_roll)
+roll_active = false
+do
+	local t = tb_roll
+	t.Visible = false
+	t.Size = UDim2.new(1, 2, 0, 51)
+	t.Position = UDim2.new(0, -1, 0, -1)
+	t.AutoButtonColor = false
+	t.BorderSizePixel = 0
+	t.Text = "Click and drag over this box to set Camera roll. Right click to reset."
+	t.BackgroundColor3 = colors.black
+	t.TextColor3 = colors.white
+	t.BackgroundTransparency = .2
+	t.TextStrokeTransparency = 0
+	t.TextStrokeColor3 = colors.black
+	local tb = Instance.new("TextBox", t)
+	tb.Size = UDim2.new(0, 40, 0, 18)
+	tb.Position = UDim2.new(.5, -20, 1, 0)
+	tb.ClearTextOnFocus = true
+	tb.BorderSizePixel = 0
+	tb.Text = "0"
+	tb.BackgroundColor3 = colors.black
+	tb.TextColor3 = colors.white
+	tb.BackgroundTransparency = .2
+	tb.TextStrokeTransparency = 0
+	tb.TextStrokeColor3 = colors.black
+	
+	local holding = false
+	local curr_angle = 0
+	local function updateTextBoxAngle()
+		local angle = math.floor(math.deg(curr_angle) + .5)
+		tb.Text = angle
+	end
+	local function setCamRot(r)
+		local cam = workspace.CurrentCamera
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam:SetRoll(r)
+	end
+	tb.FocusLost:connect(function ()
+		local n = tonumber(tb.Text)
+		if not n then setCamRot(curr_angle) updateTextBoxAngle() return end
+		local angle = math.rad(tb.Text)
+		setCamRot(angle)
+		curr_angle = angle
+		updateTextBoxAngle()
+		print("Set camera rotation to " .. angle)
+	end)
+	local function getAngleFromX(x)
+		local w = t.AbsoluteSize.X + 1
+		return (x / w - .5) * 720
+	end
+	t.MouseMoved:connect(function (x, y)
+		if holding then
+			local angle = getAngleFromX(x)
+			setCamRot(math.rad(angle))
+			curr_angle = math.rad(angle)
+			updateTextBoxAngle()
+		end
+	end)
+	t.MouseButton2Down:connect(function ()
+		setCamRot(0)
+		curr_angle = 0
+		updateTextBoxAngle()
+	end)
+	t.MouseButton1Down:connect(function (x, y)
+		if not roll_active then return end
+		holding = true
+	end)
+	local function stopDrag()
+		holding = false
+	end
+	t.MouseButton1Up:connect(stopDrag)
+	t.MouseEnter:connect(stopDrag)
+	t.MouseLeave:connect(stopDrag)
+	button_roll.Click:connect(function ()
+		roll_active = not roll_active
+		t.Visible = roll_active
+		if not roll_active then
+			workspace.CurrentCamera.CameraType = Enum.CameraType.Fixed
+		end
+	end)
+end
 
 localscript_str = [=[wait()
 
@@ -135,6 +217,7 @@ function playTrack(camera, track)
 	local cf = camera.CoordinateFrame
 	local fc = camera.Focus
 	local fov = camera.FieldOfView
+	local roll = camera:GetRoll()
 	local free_mode = false
 	local focus_part = camera.CameraSubject
 	if camera.CameraSubject then free_mode = false end
@@ -149,16 +232,20 @@ function playTrack(camera, track)
 				camera.Focus = fc
 			end
 			camera.FieldOfView = math.max(20, math.min(80, fov))
+			camera.CameraType = Enum.CameraType.Scriptable
+			camera:SetRoll(roll)
 			wait()
 		end
 	end)
 	local cfs = {}
 	local fcs = {}
 	local fovs = {}
+	local rolls = {}
 	for i, v in pairs(track) do
 		table.insert(cfs, v.CoordinateFrame)
 		table.insert(fcs, v.Focus)
 		table.insert(fovs, v.FieldOfView)
+		table.insert(rolls, v.Roll)
 	end
 	for n = 1, #track - 1 do
 		--print("Shot " .. n .. " to " .. (n + 1))
@@ -177,6 +264,7 @@ function playTrack(camera, track)
 			cf = interpolateCF(inter, a, cfs, n)
 			fc = interpolateCF(inter, a, fcs, n)
 			fov = interpolate.cosine(a, fovs, n)
+			roll = interpolate.cosine(a, rolls, n)
 			
 			wait()
 		end
@@ -185,11 +273,12 @@ function playTrack(camera, track)
 	enabled = false
 end
 
-function newShot(cf, focus, fov, time, tweenmode, tweentime)
+function newShot(cf, focus, fov, roll, time, tweenmode, tweentime)
 	return {
 		CoordinateFrame = cf;
 		Focus = focus;
 		FieldOfView = fov;
+		Roll = roll;
 		Time = time;
 		TweenMode = tweenmode;
 		TweenTime = tweentime;
@@ -203,6 +292,7 @@ function getShotFromShotData(camera)
 	local tweenmode = "cosine"
 	local cf = CFrame.new(0, 0, 0)
 	local fc = CFrame.new(0, 0, 1)
+	local roll = 0
 	
 	if camera:FindFirstChild("STime") then					time = camera.STime.Value end
 	if camera:FindFirstChild("STweenTime") then			tweentime = camera.STweenTime.Value end
@@ -210,8 +300,9 @@ function getShotFromShotData(camera)
 	if camera:FindFirstChild("STweenMode") then			tweenmode = camera.STweenMode.Value end
 	if camera:FindFirstChild("SCoordinateFrame") then	cf = camera.SCoordinateFrame.Value end
 	if camera:FindFirstChild("SFocus") then 				fc = camera.SFocus.Value end
+	if camera:FindFirstChild("SRoll") then 				roll = camera.SRoll.Value end
 	
-	return newShot(cf, fc, fov, time, tweenmode, tweentime)
+	return newShot(cf, fc, fov, roll, time, tweenmode, tweentime)
 end
 
 function getFocusPart()
@@ -236,7 +327,7 @@ function getTrack(p)
 		end
 	end
 	local cc = workspace.CurrentCamera
-	local current_shot = newShot(cc.CoordinateFrame, cc.Focus, cc.FieldOfView, 0, "cosine", 2.5)
+	local current_shot = newShot(cc.CoordinateFrame, cc.Focus, cc.FieldOfView, cc:GetRoll(), 0, "cosine", 2.5)
 	if from_original_camera_position then
 		table.insert(shots, 1, current_shot)
 	end
@@ -394,6 +485,10 @@ function getShotDataFromCamera(cam)
 	local sfc = Instance.new("CFrameValue", new)
 	sfc.Name = "SFocus"
 	sfc.Value = cam.Focus
+	
+	local sroll = Instance.new("NumberValue", new)
+	sroll.Name = "SRoll"
+	sroll.Value = cam:GetRoll()
 
 	return new
 end
@@ -421,11 +516,12 @@ function getTrack(p)
 	local cf = cc.CoordinateFrame
 	local fc = cc.Focus
 	local fov = cc.FieldOfView
+	local roll = cc:GetRoll()
 	
 	local focus_part = getFocusPart()
 	focus_part.CFrame = cc.Focus
 	--focus_part.Parent = cc
-	cc.CameraType = Enum.CameraType.Fixed
+	cc.CameraType = Enum.CameraType.Scriptable
 	cc.CameraSubject = focus_part
 	playTrack(workspace.CurrentCamera, shots)
 	focus_part:Destroy()
@@ -436,6 +532,7 @@ function getTrack(p)
 	cc.CoordinateFrame = cf
 	cc.Focus = fc
 	cc.FieldOfView = fov
+	cc:SetRoll(roll)
 end
 
 button_play.Click:connect(function ()
@@ -457,6 +554,14 @@ button_snap.Click:connect(function ()
 	new.Parent = cam.Parent
 	wait()
 	selection:Set{new}
+	local n = 1
+	while true do
+		if not cam.Parent:FindFirstChild(n) then
+			new.Name = n
+			break
+		end
+		n = n + 1
+	end
 end)
 
 button_localscript.Click:connect(function ()
